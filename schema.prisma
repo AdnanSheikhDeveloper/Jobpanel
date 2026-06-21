@@ -1,0 +1,133 @@
+// schema.prisma
+// CareerHQ — Personal Career Command Center
+// Drop this into prisma/schema.prisma after `npx prisma init`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // Supabase pooled connection (use for app runtime)
+  directUrl = env("DIRECT_URL")     // Supabase direct connection (use for migrations)
+}
+
+enum ApplicationStatus {
+  WISHLIST
+  APPLIED
+  SCREENING
+  INTERVIEW
+  TECHNICAL
+  HR_ROUND
+  OFFER
+  REJECTED
+  GHOSTED
+  WITHDRAWN
+}
+
+enum Platform {
+  LINKEDIN
+  NAUKRI
+  INDEED
+  WELLFOUND
+  REFERRAL
+  DIRECT_EMAIL
+  COMPANY_SITE
+  OTHER
+}
+
+enum OutreachType {
+  COLD_EMAIL
+  LINKEDIN_DM
+  COVER_LETTER
+  FOLLOW_UP
+}
+
+model Application {
+  id             String            @id @default(cuid())
+  company        String
+  role           String
+  location       String?
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String            @default("INR")
+  jobUrl         String?
+  status         ApplicationStatus @default(APPLIED)
+  platform       Platform
+  appliedDate    DateTime          @default(now())
+  lastActivity   DateTime          @default(now())
+  notes          String?
+
+  contacts       Contact[]
+  followUps      FollowUp[]
+  outreachLogs   OutreachLog[]
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([status])
+  @@index([appliedDate])
+}
+
+model Contact {
+  id            String      @id @default(cuid())
+  name          String
+  email         String?
+  linkedinUrl   String?
+  role          String?     // e.g. "Recruiter", "Hiring Manager", "Referral"
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId])
+}
+
+model FollowUp {
+  id            String      @id @default(cuid())
+  dueDate       DateTime
+  completed     Boolean     @default(false)
+  note          String?
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime    @default(now())
+
+  @@index([dueDate, completed])
+}
+
+model OutreachLog {
+  id            String       @id @default(cuid())
+  type          OutreachType
+  prompt        String       @db.Text
+  output        String       @db.Text
+  sent          Boolean      @default(false)
+
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime     @default(now())
+}
+
+model ResumeVersion {
+  id          String   @id @default(cuid())
+  label       String   // e.g. "v3 — UAE Fintech Focus"
+  fileUrl     String   // Supabase Storage public/signed URL
+  targetRole  String?
+  atsScore    Int?
+  feedback    String?  @db.Text
+  isActive    Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+}
+
+model DailyGoal {
+  id             String   @id @default(cuid())
+  date           DateTime @unique @default(now())
+  applyTarget    Int      @default(5)
+  applyDone      Int      @default(0)
+  outreachTarget Int      @default(10)
+  outreachDone   Int      @default(0)
+}

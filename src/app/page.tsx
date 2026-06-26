@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Table, Kanban, LogOut, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Search, Table, Kanban, LogOut, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Application, ApplicationStatus } from "@/types";
 
@@ -166,6 +166,13 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/outreach")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+              AI Outreach Studio
+            </button>
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"

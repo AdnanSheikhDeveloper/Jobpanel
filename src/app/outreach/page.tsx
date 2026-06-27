@@ -18,6 +18,8 @@ import {
   ArrowLeft,
   Clock,
   LogOut,
+  FileText,
+  BarChart3,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Application, OutreachType } from "@/types";
@@ -111,6 +113,24 @@ export default function OutreachPage() {
   useEffect(() => {
     fetchApplications();
     fetchHistory();
+
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const appIdParam = searchParams.get("appId");
+      const companyParam = searchParams.get("company");
+      const roleParam = searchParams.get("role");
+      const typeParam = searchParams.get("type");
+
+      if (appIdParam) setSelectedAppId(appIdParam);
+      if (companyParam) setCompany(companyParam);
+      if (roleParam) setRole(roleParam);
+      if (
+        typeParam &&
+        ["COLD_EMAIL", "LINKEDIN_DM", "COVER_LETTER", "FOLLOW_UP"].includes(typeParam)
+      ) {
+        setMessageType(typeParam as OutreachType);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -267,6 +287,20 @@ export default function OutreachPage() {
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Applications
+            </button>
+             <button
+              onClick={() => router.push("/resume")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-violet-400" />
+              Resume Vault
+            </button>
+            <button
+              onClick={() => router.push("/analytics")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+              Analytics
             </button>
             <button
               onClick={handleSignOut}

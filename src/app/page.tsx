@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Table, Kanban, LogOut, Loader2, AlertCircle, Sparkles } from "lucide-react";
+import { Plus, Search, Table, Kanban, LogOut, Loader2, AlertCircle, Sparkles, FileText, BarChart3, Target, TrendingUp, ArrowUpRight, ChevronDown, ChevronUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Application, ApplicationStatus } from "@/types";
 
@@ -29,6 +29,65 @@ export default function HomePage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
 
+  interface AnalyticsSummary {
+    dailyGoal: {
+      id: string;
+      date: string | Date;
+      applyTarget: number;
+      applyDone: number;
+      outreachTarget: number;
+      outreachDone: number;
+    };
+    funnel: Record<string, number>;
+    rates: {
+      totalApplications: number;
+      responseRate: number;
+      interviewRate: number;
+      offerRate: number;
+    };
+    platformStats: Array<{
+      platform: string;
+      total: number;
+      responses: number;
+      rate: number;
+    }>;
+    staleApplications: Array<{
+      id: string;
+      company: string;
+      role: string;
+      lastActivity: string | Date;
+    }>;
+    thisWeekCount: number;
+    lastWeekCount: number;
+    weeklyTrend: Array<{
+      label: string;
+      count: number;
+    }>;
+  }
+
+  // Dashboard Overview States
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [showDashboard, setShowDashboard] = useState(true);
+  const [showGoalEdit, setShowGoalEdit] = useState(false);
+  const [newApplyTarget, setNewApplyTarget] = useState(5);
+  const [newOutreachTarget, setNewOutreachTarget] = useState(10);
+  const [updatingGoal, setUpdatingGoal] = useState(false);
+
+  // Fetch summary callback
+  const fetchSummary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/analytics/summary");
+      if (res.ok) {
+        const data = await res.json();
+        setSummary(data);
+        setNewApplyTarget(data.dailyGoal.applyTarget);
+        setNewOutreachTarget(data.dailyGoal.outreachTarget);
+      }
+    } catch (err) {
+      console.error("Failed to load summary stats:", err);
+    }
+  }, []);
+
   // Fetch Applications
   const fetchApplications = useCallback(async () => {
     setLoading(true);
@@ -51,6 +110,9 @@ export default function HomePage() {
       const data = await response.json();
       setApplications(data);
 
+      // Refresh Summary
+      fetchSummary();
+
       // If drawer is open, update selectedApp reference with fresh data
       if (selectedApp) {
         const freshApp = data.find((app: Application) => app.id === selectedApp.id);
@@ -63,13 +125,61 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, searchQuery, selectedApp]);
+  }, [statusFilter, searchQuery, selectedApp, fetchSummary]);
 
   // Load on mount and filter changes
   useEffect(() => {
     fetchApplications();
+    fetchSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  const handleMarkFollowedUp = async (id: string) => {
+    try {
+      const response = await fetch(`/api/applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lastActivity: new Date().toISOString() }),
+      });
+      if (response.ok) {
+        fetchApplications();
+      } else {
+        throw new Error("Failed to update activity");
+      }
+    } catch (err) {
+      console.error("Failed to mark followed up:", err);
+    }
+  };
+
+  const handleSaveGoals = async () => {
+    setUpdatingGoal(true);
+    try {
+      const res = await fetch("/api/analytics/summary", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applyTarget: Number(newApplyTarget),
+          outreachTarget: Number(newOutreachTarget),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSummary((prev) =>
+          prev
+            ? {
+                ...prev,
+                dailyGoal: data,
+              }
+            : null
+        );
+        setShowGoalEdit(false);
+      }
+    } catch (err) {
+      console.error("Failed to save goals:", err);
+    } finally {
+      setUpdatingGoal(false);
+    }
+  };
 
   // Handle Search Input on Enter or debounce-like effect
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -174,6 +284,20 @@ export default function HomePage() {
               AI Outreach Studio
             </button>
             <button
+              onClick={() => router.push("/resume")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-violet-400" />
+              Resume Vault
+            </button>
+            <button
+              onClick={() => router.push("/analytics")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-violet-400" />
+              Analytics
+            </button>
+            <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-all duration-200 cursor-pointer"
             >
@@ -189,9 +313,27 @@ export default function HomePage() {
         {/* Page title and top actions */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-              Applications Command Center
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                Applications Command Center
+              </h1>
+              <button
+                onClick={() => setShowDashboard(!showDashboard)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-900/30 text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition cursor-pointer mt-1"
+              >
+                {showDashboard ? (
+                  <>
+                    <ChevronUp className="w-3 h-3 text-violet-400" />
+                    Hide Summary
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3 h-3 text-violet-400" />
+                    Show Summary
+                  </>
+                )}
+              </button>
+            </div>
             <p className="text-sm text-slate-400 mt-1">
               Track and manage all your job postings, stages, contacts, and follow-ups.
             </p>
@@ -210,6 +352,224 @@ export default function HomePage() {
           <div className="flex items-start gap-3 p-4 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 text-sm">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Dashboard Section */}
+        {showDashboard && summary && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Stale Applications Banner */}
+            {summary.staleApplications && summary.staleApplications.length > 0 && (
+              <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-amber-300 text-sm space-y-3">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertCircle className="w-4 h-4 text-amber-400 animate-pulse" />
+                  <span>{summary.staleApplications.length} Application{summary.staleApplications.length > 1 ? "s" : ""} require attention (stale for 5+ days)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {summary.staleApplications.map((app) => (
+                    <div key={app.id} className="p-3 rounded-xl bg-slate-950/80 border border-slate-900 flex flex-col justify-between gap-2.5">
+                      <div>
+                        <div className="font-bold text-slate-200 text-xs sm:text-sm">{app.company}</div>
+                        <div className="text-xs text-slate-400">{app.role}</div>
+                        <div className="text-[10px] text-slate-500 mt-1">Stale since {new Date(app.lastActivity).toLocaleDateString()}</div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <button
+                          onClick={() => handleMarkFollowedUp(app.id)}
+                          className="flex-1 text-center py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-[11px] font-semibold text-slate-350 transition cursor-pointer"
+                        >
+                          Followed Up
+                        </button>
+                        <button
+                          onClick={() =>
+                            router.push(
+                              `/outreach?appId=${app.id}&company=${encodeURIComponent(app.company)}&role=${encodeURIComponent(app.role)}&type=FOLLOW_UP`
+                            )
+                          }
+                          className="flex-1 text-center py-1.5 rounded-lg bg-violet-600/20 border border-violet-500/30 hover:border-violet-500/50 text-[11px] font-semibold text-violet-300 transition cursor-pointer"
+                        >
+                          Draft Follow Up
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dashboard Cards Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Daily Goals Tracking */}
+              <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-900 backdrop-blur-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-violet-400" />
+                    <h3 className="font-semibold text-slate-200">Today&apos;s Habits</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowGoalEdit(!showGoalEdit)}
+                    className="text-xs text-violet-400 hover:text-violet-300 font-medium cursor-pointer"
+                  >
+                    {showGoalEdit ? "Cancel" : "Edit Targets"}
+                  </button>
+                </div>
+
+                {showGoalEdit ? (
+                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-900 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-1">Apply Target</label>
+                        <input
+                          type="number"
+                          value={newApplyTarget}
+                          onChange={(e) => setNewApplyTarget(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 outline-none text-xs"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-1">Outreach Target</label>
+                        <input
+                          type="number"
+                          value={newOutreachTarget}
+                          onChange={(e) => setNewOutreachTarget(Number(e.target.value))}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 outline-none text-xs"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleSaveGoals}
+                      disabled={updatingGoal}
+                      className="w-full py-1.5 rounded-lg bg-violet-650 hover:bg-violet-550 text-xs font-semibold transition cursor-pointer text-white"
+                    >
+                      {updatingGoal ? "Saving..." : "Save Targets"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* App Progress */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className="text-slate-400">Applications Sent</span>
+                        <span className="text-slate-200">
+                          {summary.dailyGoal.applyDone} / {summary.dailyGoal.applyTarget}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-950 rounded-full h-2 border border-slate-900 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-violet-600 to-indigo-500 h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (summary.dailyGoal.applyDone / summary.dailyGoal.applyTarget) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Outreach Progress */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className="text-slate-400">Outreach Sent</span>
+                        <span className="text-slate-200">
+                          {summary.dailyGoal.outreachDone} / {summary.dailyGoal.outreachTarget}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-950 rounded-full h-2 border border-slate-900 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-violet-600 to-indigo-500 h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (summary.dailyGoal.outreachDone / summary.dailyGoal.outreachTarget) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pipeline funnel overview */}
+              <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-900 backdrop-blur-sm space-y-4">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-violet-400" />
+                  <h3 className="font-semibold text-slate-200">Pipeline Funnel</h3>
+                </div>
+
+                <div className="grid grid-cols-5 gap-2 text-center">
+                  {[
+                    { label: "Wishlist", count: summary.funnel.WISHLIST, color: "text-slate-500" },
+                    { label: "Applied", count: summary.funnel.APPLIED, color: "text-indigo-400" },
+                    { label: "Screening", count: summary.funnel.SCREENING, color: "text-amber-400" },
+                    {
+                      label: "Interview",
+                      count:
+                        summary.funnel.INTERVIEW +
+                        summary.funnel.TECHNICAL +
+                        summary.funnel.HR_ROUND,
+                      color: "text-violet-400",
+                    },
+                    { label: "Offer", count: summary.funnel.OFFER, color: "text-emerald-500 font-bold" },
+                  ].map((stage, idx) => (
+                    <div key={idx} className="flex flex-col items-center justify-between p-2 rounded-xl bg-slate-950/40 border border-slate-900/60">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider block truncate w-full">
+                        {stage.label}
+                      </span>
+                      <span className={`text-lg font-extrabold mt-1 block ${stage.color}`}>
+                        {stage.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weekly compare stats */}
+              <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-900 backdrop-blur-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-violet-400" />
+                    <h3 className="font-semibold text-slate-200">Weekly Pace</h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-2">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-slate-500 uppercase block tracking-wider">This Week</span>
+                    <span className="text-2xl font-extrabold text-slate-200">{summary.thisWeekCount}</span>
+                    <span className="text-[10px] text-slate-500 block">applications</span>
+                  </div>
+
+                  <div className="h-8 w-px bg-slate-800" />
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-slate-500 uppercase block tracking-wider">Last Week</span>
+                    <span className="text-2xl font-extrabold text-slate-400">{summary.lastWeekCount}</span>
+                    <span className="text-[10px] text-slate-500 block">applications</span>
+                  </div>
+
+                  <div className="h-8 w-px bg-slate-800" />
+
+                  <div className="flex flex-col items-end justify-center">
+                    {summary.thisWeekCount >= summary.lastWeekCount ? (
+                      <div className="flex items-center gap-1 text-emerald-450 font-bold text-sm bg-emerald-500/10 px-2 py-1 rounded-lg">
+                        <span>+{(summary.thisWeekCount - summary.lastWeekCount)}</span>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-rose-450 font-bold text-sm bg-rose-500/10 px-2 py-1 rounded-lg">
+                        <span>-{(summary.lastWeekCount - summary.thisWeekCount)}</span>
+                        <ArrowUpRight className="w-3.5 h-3.5 text-rose-400 rotate-90" />
+                      </div>
+                    )}
+                    <span className="text-[8px] text-slate-500 uppercase block tracking-wider mt-1 text-right">vs Last Week</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

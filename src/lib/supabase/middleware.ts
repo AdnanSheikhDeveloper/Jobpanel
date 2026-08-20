@@ -6,6 +6,19 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const isLoginPage = request.nextUrl.pathname === "/login";
+  const isAuthCallback = request.nextUrl.pathname.startsWith("/auth/callback");
+
+  // Allow static files, api routes (like cron), and public assets to bypass auth middleware
+  const isStaticAsset =
+    request.nextUrl.pathname.startsWith("/_next") ||
+    request.nextUrl.pathname.includes(".") ||
+    request.nextUrl.pathname.startsWith("/api/");
+
+  if (isStaticAsset || isAuthCallback) {
+    return supabaseResponse;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
@@ -35,21 +48,8 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLoginPage = request.nextUrl.pathname === "/login";
-  const isAuthCallback = request.nextUrl.pathname.startsWith("/auth/callback");
-
-  // Allow static files, api routes (like cron), and public assets to bypass auth
-  const isStaticAsset =
-    request.nextUrl.pathname.startsWith("/_next") ||
-    request.nextUrl.pathname.includes(".") ||
-    request.nextUrl.pathname.startsWith("/api/");
-
-  if (isStaticAsset) {
-    return supabaseResponse;
-  }
-
   // Redirect to login if user is not authenticated
-  if (!user && !isLoginPage && !isAuthCallback) {
+  if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
